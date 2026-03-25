@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>本地音乐可视化工具</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/wavesurfer.js@6.6.3/dist/wavesurfer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#C92027',
+            secondary: '#333333',
+            accent: '#F5F5F5',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .keyboard-key {
+        transition: all 0.1s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      }
+      .keyboard-key.pressed {
+        transform: translateY(2px);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+      }
+      .visualizer-pulse {
+        animation: pulse 0.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      .text-shadow {
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      .gradient-bg {
+        background: linear-gradient(135deg, #C92027 0%, #8A0000 100%);
+      }
+      .drop-area {
+        border: 2px dashed #C92027;
+        border-radius: 16px;
+        transition: all 0.3s ease;
+      }
+      .drop-area.active {
+        background-color: rgba(201, 32, 39, 0.1);
+        border-color: #8A0000;
+      }
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div class="container mx-auto px-4 py-8">
+    <!-- 标题栏 -->
+    <header class="flex justify-between items-center mb-8">
+      <div class="flex items-center space-x-3">
+        <i class="fa fa-music text-primary text-3xl"></i>
+        <h1 class="text-2xl font-bold">本地音乐可视化</h1>
+      </div>
+      <div class="relative">
+        <input type="file" id="file-input" class="hidden" accept="audio/*">
+        <button id="upload-btn" class="bg-primary hover:bg-primary/80 text-white px-6 py-2 rounded-full transition-all duration-300 flex items-center">
+          <i class="fa fa-upload mr-2"></i> 上传音频文件
+        </button>
+      </div>
+    </header>
+
+    <!-- 文件拖放区域 -->
+    <div id="drop-area" class="drop-area mb-8 p-8 text-center">
+      <i class="fa fa-music text-5xl text-gray-500 mb-4"></i>
+      <h2 class="text-xl font-semibold mb-2">拖放音频文件到此处</h2>
+      <p class="text-gray-400 mb-4">支持 MP3、WAV、OGG 等格式</p>
+      <button id="browse-btn" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded-full transition-all duration-300">
+        <i class="fa fa-folder-open mr-2"></i> 浏览文件
+      </button>
+    </div>
+
+    <!-- 主内容区 -->
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <!-- 左侧：歌曲信息 -->
+      <div class="lg:col-span-1 bg-gray-800/50 rounded-xl p-6 backdrop-blur-md">
+        <div id="song-info" class="hidden">
+          <div class="relative rounded-lg overflow-hidden mb-4">
+            <img id="album-cover" src="https://picsum.photos/400/400" alt="专辑封面" class="w-full h-64 object-cover">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end p-4">
+              <div>
+                <h2 id="song-title" class="text-xl font-bold text-shadow">歌曲标题</h2>
+                <p id="song-artist" class="text-gray-300">艺术家</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <h3 class="text-sm text-gray-400 mb-1">文件信息</h3>
+              <p id="file-info" class="text-lg font-semibold">未选择文件</p>
+            </div>
+            <div>
+              <h3 class="text-sm text-gray-400 mb-1">你好！</p>
+                欢迎来到Roselind的音乐可视化交互界面</p>
+                请享受音乐吧~
+              </h3>
+
+              <div class="grid grid-cols-2 gap-4">
+            </div>
+            </div>
+            </div>
+          </div>
+
+
+        <div id="no-song-selected" class="flex flex-col items-center justify-center h-96">
+          <i class="fa fa-music text-6xl text-gray-600 mb-4"></i>
+          <p class="text-gray-500 text-center">请上传音频文件</p>
+          <p class="text-gray-400 text-sm mt-2">可视化将根据音乐节奏和频率动态生成</p>
+        </div>
+      </div>
+
+      <!-- 右侧：可视化区域 -->
+      <div class="lg:col-span-2 bg-gray-800/30 rounded-xl overflow-hidden">
+        <div id="visualization-container" class="relative w-full h-[500px]">
+          <!-- 波形可视化 -->
+          <div id="waveform-visualizer" class="absolute inset-0">
+            <canvas id="waveform-canvas" class="w-full h-full"></canvas>
+          </div>
+
+          <!-- 粒子可视化 (叠加在波形之上) -->
+          <div id="particle-visualizer" class="absolute inset-0 pointer-events-none">
+            <canvas id="particle-canvas" class="w-full h-full"></canvas>
+          </div>
+
+          <!-- 播放控制 -->
+          <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/60 backdrop-blur-md rounded-full px-6 py-3 flex items-center space-x-6">
+            <button id="prev-btn" class="text-gray-300 hover:text-white transition-colors">
+              <i class="fa fa-step-backward text-xl"></i>
+            </button>
+            <button id="play-btn" class="bg-primary hover:bg-primary/80 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-105" disabled>
+              <i class="fa fa-play text-white"></i>
+            </button>
+            <button id="next-btn" class="text-gray-300 hover:text-white transition-colors">
+              <i class="fa fa-step-forward text-xl"></i>
+            </button>
+          </div>
+
+          <!-- 进度条 -->
+          <div class="absolute bottom-20 left-0 right-0 px-6">
+            <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div id="progress-bar" class="h-full bg-primary w-0 transition-all duration-100"></div>
+            </div>
+            <div class="flex justify-between text-xs text-gray-400 mt-1">
+              <span id="current-time">0:00</span>
+              <span id="total-time">0:00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 可视化样式选择器 -->
+        <div class="bg-gray-900 p-4 flex justify-center space-x-4">
+          <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors active" data-style="waveform">
+            <i class="fa fa-area-chart mr-2"></i> 🎢
+          </button>
+          <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors" data-style="particles">
+            <i class="fa fa-star mr-2"></i>🤪
+          </button>
+          <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors" data-style="geometry">
+            <i class="fa fa-cubes mr-2"></i> 🧀
+          </button>
+          <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors" data-style="waterdrop">
+            <i class="fa fa-tint mr-2"></i> 💦
+          </button>
+          <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors" data-style="number10">
+            <i class="fa fa-text-height mr-2"></i> 🔢
+          </button>
+          <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors" data-style="keyboard">
+            <i class="fa fa-keyboard-o mr-2"></i> 🎹
+          </button>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 模块化脚本引用 -->
+  <script type="module">
+    import { AudioProcessor } from './src/audio-processor.js';
+    import { UIController } from './src/ui-components/ui-controller.js';
+    import { WaveformRender } from './src/visualization-engine/waveform-render.js';
+    import { ParticleSystem } from './src/visualization-engine/particle-system.js';
+    import { GeometryBuilder } from './src/visualization-engine/geometry-builder.js';
+    import { KeyboardMapper } from './src/visualization-engine/keyboard-mapper.js';
+    import { PrecipitationRender } from './src/visualization-engine/precipitation-render.js';
+    import { formatTime, formatFileSize, simpleNoise } from './src/utils.js';
+
+    // 初始化应用
+    document.addEventListener('DOMContentLoaded', () => {
+      // 初始化画布
+      const waveformCanvas = document.getElementById('waveform-canvas');
+      const particleCanvas = document.getElementById('particle-canvas');
+      
+      // 调整画布大小
+      function resizeCanvas() {
+        waveformCanvas.width = waveformCanvas.offsetWidth;
+        waveformCanvas.height = waveformCanvas.offsetHeight;
+        particleCanvas.width = particleCanvas.offsetWidth;
+        particleCanvas.height = particleCanvas.offsetHeight;
+      }
+      
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      // 初始化音频处理器
+      const audioProcessor = new AudioProcessor();
+      
+      // 初始化可视化引擎
+      const waveformRender = new WaveformRender(waveformCanvas);
+      const particleSystem = new ParticleSystem(particleCanvas);
+      const geometryBuilder = new GeometryBuilder(waveformCanvas);
+      const keyboardMapper = new KeyboardMapper(waveformCanvas);
+      const precipitationRender = new PrecipitationRender(waveformCanvas);
+
+      // 初始化UI控制器
+      const uiController = new UIController(
+        audioProcessor,
+        waveformRender,
+        particleSystem,
+        geometryBuilder,
+        keyboardMapper,
+        precipitationRender
+      );
+
+      // 启动应用
+      uiController.init();
+    });
+  </script>
+</body>
+</html>

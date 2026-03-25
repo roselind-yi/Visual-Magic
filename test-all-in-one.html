@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>音乐可视化测试</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#C92027',
+            secondary: '#333333',
+            accent: '#F5F5F5',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .keyboard-key {
+        transition: all 0.1s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      }
+      .keyboard-key.pressed {
+        transform: translateY(2px);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+      }
+      .visualizer-pulse {
+        animation: pulse 0.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      .text-shadow {
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      .gradient-bg {
+        background: linear-gradient(135deg, #C92027 0%, #8A0000 100%);
+      }
+      .drop-area {
+        border: 2px dashed #C92027;
+        border-radius: 16px;
+        transition: all 0.3s ease;
+      }
+      .drop-area.active {
+        background-color: rgba(201, 32, 39, 0.1);
+        border-color: #8A0000;
+      }
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.5;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div class="container mx-auto px-4 py-8">
+    <!-- 标题栏 -->
+    <header class="flex justify-between items-center mb-8">
+      <div class="flex items-center space-x-3">
+        <i class="fa fa-music text-primary text-3xl"></i>
+        <h1 class="text-2xl font-bold">本地音乐可视化</h1>
+      </div>
+      <div class="relative">
+        <input type="file" id="file-input" class="hidden" accept="audio/*">
+        <button id="upload-btn" class="bg-primary hover:bg-primary/80 text-white px-6 py-2 rounded-full transition-all duration-300 flex items-center">
+          <i class="fa fa-upload mr-2"></i> 上传音频文件
+        </button>
+      </div>
+    </header>
+
+    <!-- 文件拖放区域 -->
+    <div id="drop-area" class="drop-area mb-8 p-8 text-center">
+      <i class="fa fa-music text-5xl text-gray-500 mb-4"></i>
+      <h2 class="text-xl font-semibold mb-2">拖放音频文件到此处</h2>
+      <p class="text-gray-400 mb-4">支持 MP3、WAV、OGG 等格式</p>
+      <button id="browse-btn" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded-full transition-all duration-300">
+        <i class="fa fa-folder-open mr-2"></i> 浏览文件
+      </button>
+    </div>
+
+    <!-- 主内容区 -->
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <!-- 左侧：歌曲信息 -->
+      <div class="lg:col-span-1 bg-gray-800/50 rounded-xl p-6 backdrop-blur-md">
+        <div id="song-info" class="hidden">
+          <div class="relative rounded-lg overflow-hidden mb-4">
+            <img id="album-cover" src="https://picsum.photos/400/400" alt="专辑封面" class="w-full h-64 object-cover">
+            <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end p-4">
+              <div>
+                <h2 id="song-title" class="text-xl font-bold text-shadow">歌曲标题</h2>
+                <p id="song-artist" class="text-gray-300">艺术家</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <h3 class="text-sm text-gray-400 mb-1">文件信息</h3>
+              <p id="file-info" class="text-lg font-semibold">未选择文件</p>
+            </div>
+            <div>
+              <h3 class="text-sm text-gray-400 mb-1">你好！</p>
+                欢迎来到Roselind的音乐可视化交互界面</p>
+                请享受音乐吧~
+              </h3>
+
+              <div class="grid grid-cols-2 gap-4">
+            </div>
+            </div>
+            </div>
+          </div>
+
+
+        <div id="no-song-selected" class="flex flex-col items-center justify-center h-96">
+          <i class="fa fa-music text-6xl text-gray-600 mb-4"></i>
+          <p class="text-gray-500 text-center">请上传音频文件</p>
+          <p class="text-gray-400 text-sm mt-2">可视化将根据音乐节奏和频率动态生成</p>
+        </div>
+      </div>
+
+      <!-- 右侧：可视化区域 -->
+      <div class="lg:col-span-2 bg-gray-800/30 rounded-xl overflow-hidden">
+        <div id="visualization-container" class="relative w-full h-[500px]">
+          <!-- 波形可视化 -->
+          <div id="waveform-visualizer" class="absolute inset-0">
+            <canvas id="waveform-canvas" class="w-full h-full"></canvas>
+          </div>
+
+          <!-- 粒子可视化 (叠加在波形之上) -->
+          <div id="particle-visualizer" class="absolute inset-0 pointer-events-none">
+            <canvas id="particle-canvas" class="w-full h-full"></canvas>
+          </div>
+
+          <!-- 播放控制 -->
+          <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/60 backdrop-blur-md rounded-full px-6 py-3 flex items-center space-x-6">
+            <button id="prev-btn" class="text-gray-300 hover:text-white transition-colors">
+              <i class="fa fa-step-backward text-xl"></i>
+            </button>
+            <button id="play-btn" class="bg-primary hover:bg-primary/80 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-105" disabled>
+              <i class="fa fa-play text-white"></i>
+            </button>
+            <button id="next-btn" class="text-gray-300 hover:text-white transition-colors">
+              <i class="fa fa-step-forward text-xl"></i>
+            </button>
+          </div>
+
+          <!-- 进度条 -->
+          <div class="absolute bottom-20 left-0 right-0 px-6">
+            <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+              <div id="progress-bar" class="h-full bg-primary w-0 transition-all duration-100"></div>
+            </div>
+            <div class="flex justify-between text-xs text-gray-400 mt-1">
+              <span id="current-time">0:00</span>
+              <span id="total-time">0:00</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 可视化样式选择器 -->
+        <div class="bg-gray-900 p-4 flex justify-center space-x-4">
+          <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors active" data-style="waveform">
+            <i class="fa fa-area-chart mr-2"></i> 🎢
+          </button>
+          <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors" data-style="particles">
+            <i class="fa fa-star mr-2"></i>🤪
+          </button>
+          <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors" data-style="geometry">
+            <i class="fa fa-cubes mr-2"></i> 🧀
+          </button>
+          <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors" data-style="waterdrop">
+            <i class="fa fa-tint mr-2"></i> 💦
+          </button>
+          <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors" data-style="number10">
+            <i class="fa fa-text-height mr-2"></i> 🔢
+          </button>
+          <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors" data-style="keyboard">
+            <i class="fa fa-keyboard-o mr-2"></i> 🎹
+          </button>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // 工具函数
+    function formatTime(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = Math.floor(seconds % 60);
+      return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      else return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    function simpleNoise(x, y, seed = 0) {
+      const n = 
+        Math.sin(x * 5.0 + y * 3.0 + seed) * 0.5 +
+        Math.sin(x * 13.0 - y * 7.0) * 0.3 +
+        Math.sin((x + y) * 17.0 + seed * 0.5) * 0.2;
+      return Math.sin(n * 3.14) * 0.8;
+    }
+
+    const noise = {
+      simplex2: (x, y) => simpleNoise(x, y, Date.now()/1000)
+    };
+
+    // 音频处理器
+    class AudioProcessor {
+      constructor() {
+        this.audioContext = null;
+        this.analyser = null;
+        this.dataArray = null;
+        this.bufferLength = null;
+        this.audioSource = null;
+        this.isPlaying = false;
+        this.audioBuffer = null;
+        this.sourceNode = null;
+        this.audioDuration = 0;
+        this.startTime = 0;
+        this.lastUpdateTime = 0;
+        this.bandCount = 4;
+        this.bandAnalysers = [];
+      }
+
+      init() {
+        if (!this.audioContext) {
+          this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          this.analyser = this.audioContext.createAnalyser();
+          this.analyser.fftSize = 8192;
+          this.initBandAnalysers();
+          this.bufferLength = this.analyser.frequencyBinCount;
+          this.dataArray = new Uint8Array(this.bufferLength);
+        }
+      }
+
+      initBandAnalysers() {
+        this.bandAnalysers.length = 0;
+        const frequencies = [256, 1024, 4096, 16384];
+        for(let i=0; i<this.bandCount; i++){
+          const bandAnalyser = this.audioContext.createAnalyser();
+          bandAnalyser.fftSize = 2048;
+          const filter = this.audioContext.createBiquadFilter();
+          if(i === 0) {
+            filter.type = "lowshelf";
+            filter.frequency.value = frequencies[i];
+          } else if(i === this.bandCount-1) {
+            filter.type = "highshelf";
+            filter.frequency.value = frequencies[i-1];
+          } else {
+            filter.type = "peaking";
+            filter.frequency.value = (frequencies[i-1] + frequencies[i])/2;
+            filter.Q.value = 1;
+          }
+          bandAnalyser.connect(filter);
+          this.bandAnalysers.push({
+            analyser: bandAnalyser,
+            filter: filter,
+            dataArray: new Uint8Array(bandAnalyser.frequencyBinCount)
+          });
+        }
+      }
+
+      async handleAudioFile(file) {
+        return new Promise((resolve, reject) => {
+          this.init();
+          
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const arrayBuffer = e.target.result;
+            this.audioContext.decodeAudioData(arrayBuffer, (buffer) => {
+              this.audioBuffer = buffer;
+              this.audioDuration = buffer.duration;
+              this.createAudioSource();
+              resolve({ success: true, duration: buffer.duration });
+            }, (error) => {
+              console.error('解码音频失败:', error);
+              reject(new Error('无法解码音频文件，请尝试其他格式'));
+            });
+          };
+          reader.onerror = (error) => {
+            reject(new Error('读取文件失败'));
+          };
+          reader.readAsArrayBuffer(file);
+        });
+      }
+
+      createAudioSource() {
+        if (!this.audioBuffer) return;
+        if (this.sourceNode) this.sourceNode.disconnect();
+        this.sourceNode = this.audioContext.createBufferSource();
+        this.sourceNode.buffer = this.audioBuffer;
+        const lastNode = this.audioContext.createGain();
+        this.sourceNode.connect(this.analyser);
+        this.analyser.connect(lastNode);
+        lastNode.connect(this.audioContext.destination);
+        this.sourceNode.loop = true;
+      }
+
+      togglePlay() {
+        if (!this.audioBuffer) return false;
+        if (this.isPlaying) {
+          this.stopAudio();
+        } else {
+          if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+          }
+          if (!this.sourceNode) this.createAudioSource();
+          this.sourceNode.start(0);
+          this.startTime = this.audioContext.currentTime;
+          this.isPlaying = true;
+          this.lastUpdateTime = performance.now();
+        }
+        return this.isPlaying;
+      }
+
+      stopAudio() {
+        if (this.sourceNode) {
+          this.sourceNode.stop();
+          this.sourceNode.disconnect();
+          this.sourceNode = null;
+        }
+        this.isPlaying = false;
+      }
+
+      getCurrentTime() {
+        if (!this.isPlaying || !this.audioContext) return 0;
+        return this.audioContext.currentTime - this.startTime;
+      }
+
+      getDuration() {
+        return this.audioDuration;
+      }
+
+      getTimeDomainData() {
+        if (!this.analyser) return null;
+        this.analyser.getByteTimeDomainData(this.dataArray);
+        return this.dataArray;
+      }
+
+      getFrequencyData() {
+        if (!this.analyser) return null;
+        this.analyser.getByteFrequencyData(this.dataArray);
+        return this.dataArray;
+      }
+
+      getBandData() {
+        return this.bandAnalysers.map(b => {
+          b.analyser.getByteFrequencyData(b.dataArray);
+          return b.dataArray.reduce((a,v) => a+v, 0) / b.dataArray.length;
+        });
+      }
+
+      getBufferLength() {
+        return this.bufferLength;
+      }
+
+      getIsPlaying() {
+        return this.isPlaying;
+      }
+
+      hasAudioLoaded() {
+        return this.audioBuffer !== null;
+      }
+    }
+
+    // 波形渲染
+    class WaveformRender {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.matrixNumbers = [
+          [
+            [0,0,1,0,0],
+            [0,1,1,0,0],
+            [0,0,1,0,0],
+            [0,0,1,0,0],
+            [1,1,1,1,1]
+          ],
+          [
+            [1,1,1,1,1],
+            [1,0,0,0,1],
+            [1,0,0,0,1],
+            [1,0,0,0,1],
+            [1,1,1,1,1]
+          ]
+        ];
+      }
+
+      draw(dataArray) {
+        const ctx = this.ctx;
+        const canvas = this.canvas;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+        gradient.addColorStop(0, '#2D2A91');
+        gradient.addColorStop(1, '#A32E67');
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height/2);
+
+        const smoothedData = this.smoothData(dataArray, 4);
+        
+        const sliceWidth = canvas.width * 1.0 / dataArray.length;
+        let x = 0;
+        for(let i = 0; i < dataArray.length; i++) {
+          const v = (smoothedData[i] - 128) / 128.0;
+          const isHighFreq = Math.abs(v) > 0.8;
+          if (isHighFreq) {
+            let weightedSum = 0;
+            let weightTotal = 0;
+            for (let j = Math.max(0, i - 4); j <= Math.min(dataArray.length - 1, i + 4); j++) {
+              let weight = 30 - Math.abs(j - i);
+              weightedSum += smoothedData[j] * weight;
+              weightTotal += weight;
+            }
+            smoothedData[i] = weightedSum / weightTotal;
+          }
+          const y = (smoothedData[i] - 128) / 128.0 * canvas.height/2 + canvas.height/2;
+          if(i === 0) {
+            ctx.lineTo(x, y);
+          } else {
+            const prevY = (smoothedData[i-1] - 128) / 128.0 * canvas.height/2 + canvas.height/2;
+            const cx = (x + x - sliceWidth)/2;
+            const cy = (prevY + y)/2;
+            ctx.quadraticCurveTo(cx, cy, x, y);
+          }
+          x += sliceWidth*0.7;
+        }
+
+        ctx.lineTo(canvas.width, canvas.height/2);
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = 'rgba(99, 102, 241, 0.8)';
+        ctx.shadowBlur = 15;
+        ctx.stroke();
+      }
+
+      drawSpectrum(dataArray) {
+        const ctx = this.ctx;
+        const canvas = this.canvas;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const barWidth = (canvas.width / dataArray.length) * 2.5;
+        let x = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const barHeight = (dataArray[i] / 255) * canvas.height;
+          const gradient = ctx.createLinearGradient(0, canvas.height, 0, canvas.height - barHeight);
+          gradient.addColorStop(1, '#C92027');
+          gradient.addColorStop(0.5, '#8A0000');
+          gradient.addColorStop(0, '#333333');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+          x += barWidth + 1;
+        }
+      }
+
+      drawNumber10(dataArray) {
+        const ctx = this.ctx;
+        const canvas = this.canvas;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const baseSize = 80 + (dataArray[50]/255 * 120);
+        const spacing = baseSize * 0.15;
+        const wavePhase = Date.now() / 500;
+        this.drawMatrixDigit(this.matrixNumbers[0], canvas.width/2 - baseSize*3.5, canvas.height/2 - baseSize*1.5, baseSize, spacing, dataArray, wavePhase);
+        this.drawMatrixDigit(this.matrixNumbers[1], canvas.width/2 + baseSize*0.5, canvas.height/2 - baseSize*1.5, baseSize, spacing, dataArray, wavePhase + Math.PI);
+      }
+
+      drawMatrixDigit(matrix, startX, startY, cellSize, spacing, data, phase) {
+        const ctx = this.ctx;
+        matrix.forEach((row, i) => {
+          row.forEach((cell, j) => {
+            if(cell === 1) {
+              const freqIndex = Math.floor((i*row.length + j) * (data.length/25));
+              const intensity = data[freqIndex]/255;
+              const dynamicSize = cellSize * (0.7 + intensity*0.5 + Math.sin(phase + j*0.5)*0.2);
+              const x = startX + j * (cellSize + spacing);
+              const y = startY + i * (cellSize + spacing);
+              const hue = 200 + (i*0.3 + j*0.2)*30 + phase*50;
+              const saturation = 70 + intensity * 30;
+              const lightness = 40 + intensity * 30 + Math.sin(phase*2 + j)*10;
+              ctx.beginPath();
+              ctx.arc(x + cellSize/2, y + cellSize/2, dynamicSize * 1.2, 0, Math.PI*2);
+              ctx.fillStyle = `hsla(${hue}, ${saturation}%, 50%, ${0.1 * intensity})`;
+              ctx.fill();
+              const gradient = ctx.createRadialGradient(x + cellSize/2, y + cellSize/2, 0, x + cellSize/2, y + cellSize/2, dynamicSize/2);
+              gradient.addColorStop(0, `hsl(${hue}, ${saturation}%, ${lightness}%)`);
+              gradient.addColorStop(1, `hsl(${hue}, ${saturation + 20}%, ${lightness - 20}%)`);
+              ctx.beginPath();
+              ctx.arc(x + cellSize/2, y + cellSize/2, dynamicSize/2, 0, Math.PI*2);
+              ctx.fillStyle = gradient;
+              ctx.fill();
+            }
+          });
+        });
+      }
+
+      smoothData(data, windowSize) {
+        const smoothed = [];
+        for (let i = 0; i < data.length; i++) {
+          let sum = 0;
+          let count = 0;
+          for (let j = Math.max(0, i - windowSize); j <= Math.min(data.length - 1, i + windowSize); j++) {
+            sum += data[j];
+            count++;
+          }
+          smoothed[i] = sum / count;
+        }
+        return smoothed;
+      }
+    }
+
+    // 粒子系统
+    class ParticleSystem {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.particles = [];
+        this.particleCount = 800;
+        this.currentSeason = 'spring';
+        this.seasonConfig = {
+          spring: { wind: 0.5 },
+          summer: { wind: 1.2 },
+          autumn: { wind: 0.8 },
+          winter: { wind: 0.3 }
+        };
+        this.initParticles();
+      }
+
+      initParticles() {
+        this.particles.length = 0;
+        const canvas = this.canvas;
+        for (let i = 0; i < this.particleCount; i++) {
+          this.particles.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            size: Math.random() * 2 + 1,
+            speedX: Math.random() * 3 - 1.5,
+            speedY: Math.random() * 3 - 1.5,
+            color: `hsl(${Math.random() * 360}, 80%, 60%)`,
+            alpha: Math.random() * 0.6 + 0.4
+          });
+        }
+      }
+
+      update(dataArray) {
+        const ctx = this.ctx;
+        const canvas = this.canvas;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        for (let i = 0; i < this.particles.length; i++) {
+          const p = this.particles[i];
+          const dataIndex = Math.floor((i / this.particleCount) * dataArray.length);
+          const speedFactor = (dataArray[dataIndex] / 255) * 2;
+          p.x += p.speedX * speedFactor;
+          p.y += p.speedY * speedFactor;
+
+          const noiseValue = noise.simplex2(p.x/500, Date.now()/5000);
+          p.x += this.seasonConfig[this.currentSeason].wind * (0.5 + noiseValue * 1.5);
+
+          if (p.x < 0) p.x = canvas.width;
+          if (p.x > canvas.width) p.x = 0;
+          if (p.y < 0) p.y = canvas.height;
+          if (p.y > canvas.height) p.y = 0;
+
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.alpha;
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      setSeason(season) {
+        if (this.seasonConfig[season]) {
+          this.currentSeason = season;
+        }
+      }
+
+      resize() {
+        this.initParticles();
+      }
+    }
+
+    // 几何构建
+    class GeometryBuilder {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+      }
+
+      draw(dataArray) {
+        const ctx = this.ctx;
+        const canvas = this.canvas;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = 100;
+        
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(201, 32, 39, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        const sides = 12;
+        ctx.beginPath();
+        for (let i = 0; i < sides; i++) {
+          const angle = (i * 2 * Math.PI / sides) + (Math.PI / 2);
+          const distance = radius + ((dataArray[i * 2] / 255) * 50);
+          const x = centerX + Math.cos(angle) * distance;
+          const y = centerY + Math.sin(angle) * distance;
+          if (i === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+        ctx.closePath();
+        ctx.strokeStyle = '#C92027';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        ctx.beginPath();
+        for (let i = 0; i < sides; i++) {
+          const angle1 = (i * 2 * Math.PI / sides) + (Math.PI / 2);
+          const distance1 = radius + ((dataArray[i * 2] / 255) * 50);
+          const x1 = centerX + Math.cos(angle1) * distance1;
+          const y1 = centerY + Math.sin(angle1) * distance1;
+          for (let j = i + 1; j < sides; j++) {
+            const angle2 = (j * 2 * Math.PI / sides) + (Math.PI / 2);
+            const distance2 = radius + ((dataArray[j * 2] / 255) * 50);
+            const x2 = centerX + Math.cos(angle2) * distance2;
+            const y2 = centerY + Math.sin(angle2) * distance2;
+            if (Math.abs(j - i) <= 3) {
+              ctx.moveTo(x1, y1);
+              ctx.lineTo(x2, y2);
+            }
+          }
+        }
+        ctx.strokeStyle = 'rgba(201, 32, 39, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+      resize() {
+        // 几何图形会根据画布大小自动调整
+      }
+    }
+
+    // 键盘映射
+    class KeyboardMapper {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.keyboardKeys = [];
+        this.keyboardLayout = [
+          [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+          [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+          [' ',' ',' ',' ',' ',' ',' ',' ',' ',' '],
+          [' ',' ',' ',' ',' ',' ',' ',' ',' ',' ']
+        ];
+        this.initKeyboard();
+      }
+
+      initKeyboard() {
+        this.keyboardKeys = [];
+        const canvas = this.canvas;
+        const keyWidth = canvas.width / 16;
+        const keyHeight = canvas.height / 4;
+        for(let i = 0; i < 16; i++) {
+          this.keyboardKeys.push({
+            x: i * keyWidth,
+            y: canvas.height/2 - keyHeight/2,
+            width: keyWidth * 0.9,
+            height: keyHeight,
+            pressed: false
+          });
+        }
+      }
+
+      draw(dataArray) {
+        const ctx = this.ctx;
+        const canvas = this.canvas;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        if(this.keyboardKeys.length === 0) {
+          this.initKeyboard();
+        }
+        
+        this.keyboardKeys.forEach((key, index) => {
+          const freqIndex = Math.floor(index * (dataArray.length/this.keyboardKeys.length));
+          const intensity = Math.min(dataArray[freqIndex]/255 * 1.5, 1);
+          const wavePhase = Math.sin(Date.now()/200 + index*0.3);
+          key.pressed = intensity > 0.6;
+          const pressDepth = key.pressed ? 4 : 0;
+          const keyScale = 1 + intensity * 0.2;
+          const colorHue = 220 + wavePhase * 30 + intensity * 40;
+          
+          ctx.save();
+          ctx.translate(key.x + key.width/2, key.y + key.height/2);
+          ctx.scale(keyScale, keyScale);
+          
+          ctx.beginPath();
+          ctx.roundRect(
+            -key.width/2 - 2,
+            -key.height/2 - 2,
+            key.width + 4,
+            key.height + 4 + pressDepth,
+            6
+          );
+          ctx.fillStyle = `hsl(220, 30%, ${25 - intensity*10}%)`;
+          ctx.fill();
+          
+          ctx.beginPath();
+          ctx.roundRect(
+            -key.width/2,
+            -key.height/2 + pressDepth,
+            key.width,
+            key.height,
+            4
+          );
+          const keyGradient = ctx.createLinearGradient(0, -key.height/2, 0, key.height/2);
+          keyGradient.addColorStop(0, `hsl(${colorHue}, 80%, ${60 - intensity*20}%)`);
+          keyGradient.addColorStop(1, `hsl(${colorHue}, 90%, ${40 - intensity*15}%)`);
+          ctx.fillStyle = keyGradient;
+          ctx.fill();
+          
+          ctx.fillStyle = `hsla(0,0%,100%,${0.8 + intensity*0.2})`;
+          ctx.font = `${key.height * 0.35}px 'Arial Rounded MT Bold'`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.shadowColor = `hsla(${colorHue}, 100%, 50%, 0.3)`;
+          ctx.shadowBlur = 8 * intensity;
+          ctx.fillText(this.keyboardLayout[Math.floor(index/10)][index%10], 0, pressDepth/2);
+          
+          ctx.restore();
+        });
+      }
+
+      resize() {
+        this.initKeyboard();
+      }
+    }
+
+    // 降水渲染
+    class PrecipitationRender {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+        this.precipitation = [];
+        this.config = {
+          color: [190, 80, 60],
+          density: 0.1,
+          sizeRange: [2, 5],
+          speedRange: [1.5, 3],
+        };
+      }
+
+      draw(dataArray) {
+        const ctx = this.ctx;
+        const canvas = this.canvas;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const avgIntensity = dataArray.reduce((a, v) => a + v, 0) / dataArray.length;
+        const dynamicDensity = this.config.density * (1 + avgIntensity / 255 * 2);
+        
+        if(Math.random() < dynamicDensity) {
+          this.precipitation.push({
+            x: Math.random() * canvas.width,
+            y: -50,
+            size: (Math.random() * (this.config.sizeRange[1] - this.config.sizeRange[0])) + this.config.sizeRange[0],
+            speed: (Math.random() * (this.config.speedRange[1] - this.config.speedRange[0])) + this.config.speedRange[0],
+            color: `hsl(${this.config.color[0]}, ${this.config.color[1]}%, ${this.config.color[2]}%)`
+          });
+        }
+        
+        this.precipitation = this.precipitation.filter(drop => {
+          const speedFactor = 1 + (avgIntensity / 255);
+          drop.y += drop.speed * speedFactor;
+          
+          if (drop.y > canvas.height) return false;
+          
+          ctx.beginPath();
+          ctx.ellipse(drop.x, drop.y, drop.size, drop.size * 0.6, 0, 0, 2 * Math.PI);
+          ctx.fillStyle = drop.color;
+          ctx.fill();
+          
+          return true;
+        });
+      }
+
+      resize() {
+        // 雨滴效果会根据画布大小自动调整
+      }
+
+      clear() {
+        this.precipitation = [];
+      }
+    }
+
+    // UI控制器
+    class UIController {
+      constructor(
+        audioProcessor,
+        waveformRender,
+        particleSystem,
+        geometryBuilder,
+        keyboardMapper,
+        precipitationRender
+      ) {
+        this.audioProcessor = audioProcessor;
+        this.waveformRender = waveformRender;
+        this.particleSystem = particleSystem;
+        this.geometryBuilder = geometryBuilder;
+        this.keyboardMapper = keyboardMapper;
+        this.precipitationRender = precipitationRender;
+        
+        this.visualizationType = 'waveform';
+        this.animationFrameId = null;
+        this.currentSeason = 'spring';
+        this.precipitation = [];
+        
+        this.elements = {
+          uploadBtn: document.getElementById('upload-btn'),
+          fileInput: document.getElementById('file-input'),
+          browseBtn: document.getElementById('browse-btn'),
+          dropArea: document.getElementById('drop-area'),
+          playBtn: document.getElementById('play-btn'),
+          songInfo: document.getElementById('song-info'),
+          noSongSelected: document.getElementById('no-song-selected'),
+          songTitle: document.getElementById('song-title'),
+          songArtist: document.getElementById('song-artist'),
+          albumCover: document.getElementById('album-cover'),
+          fileInfo: document.getElementById('file-info'),
+          progressBar: document.getElementById('progress-bar'),
+          currentTime: document.getElementById('current-time'),
+          totalTime: document.getElementById('total-time'),
+          visualizationStyleBtns: document.querySelectorAll('.visualization-style-btn')
+        };
+      }
+
+      init() {
+        this.bindEvents();
+        this.switchVisualizationStyle('waveform');
+      }
+
+      bindEvents() {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+          this.elements.dropArea.addEventListener(eventName, e => { 
+            e.preventDefault(); 
+            e.stopPropagation(); 
+          }, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+          this.elements.dropArea.addEventListener(eventName, () => {
+            this.elements.dropArea.classList.add('active');
+          }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+          this.elements.dropArea.addEventListener(eventName, () => {
+            this.elements.dropArea.classList.remove('active');
+          }, false);
+        });
+
+        this.elements.dropArea.addEventListener('drop', e => {
+          const file = e.dataTransfer.files[0];
+          if (file && file.type.startsWith('audio/')) {
+            this.handleAudioFile(file);
+          } else {
+            alert('请上传音频文件');
+          }
+        });
+
+        this.elements.uploadBtn.addEventListener('click', () => {
+          this.elements.fileInput.click();
+        });
+
+        this.elements.browseBtn.addEventListener('click', () => {
+          this.elements.fileInput.click();
+        });
+
+        this.elements.fileInput.addEventListener('change', () => {
+          if (this.elements.fileInput.files.length > 0) {
+            this.handleAudioFile(this.elements.fileInput.files[0]);
+          }
+        });
+
+        this.elements.playBtn.addEventListener('click', () => {
+          this.togglePlay();
+        });
+
+        this.elements.visualizationStyleBtns.forEach(btn => {
+          btn.addEventListener('click', () => {
+            this.switchVisualizationStyle(btn.dataset.style);
+          });
+        });
+      }
+
+      async handleAudioFile(file) {
+        this.elements.songTitle.textContent = file.name;
+        this.elements.songArtist.textContent = "未知艺术家";
+        this.elements.fileInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
+        
+        jsmediatags.read(file, {
+          onSuccess: (tag) => {
+            const picture = tag.tags.picture;
+            if (picture) {
+              const base64String = Array.from(new Uint8Array(picture.data)).map(byte => 
+                String.fromCharCode(byte)
+              ).join('');
+              this.elements.albumCover.src = `data:${picture.format};base64,${window.btoa(base64String)}`;
+            } else {
+              this.elements.albumCover.src = `https://picsum.photos/seed/${file.name}/400/400`;
+            }
+          },
+          onError: (error) => {
+            console.error('解析封面失败:', error);
+            this.elements.albumCover.src = `https://picsum.photos/seed/${file.name}/400/400`;
+          }
+        });
+        
+        this.elements.songInfo.classList.remove('hidden');
+        this.elements.noSongSelected.classList.add('hidden');
+        this.elements.playBtn.disabled = false;
+
+        try {
+          const result = await this.audioProcessor.handleAudioFile(file);
+          this.elements.totalTime.textContent = formatTime(result.duration);
+        } catch (error) {
+          alert(error.message);
+        }
+      }
+
+      togglePlay() {
+        const isPlaying = this.audioProcessor.togglePlay();
+        if (isPlaying) {
+          this.elements.playBtn.innerHTML = '<i class="fa fa-pause text-white"></i>';
+          this.startAnimation();
+        } else {
+          this.elements.playBtn.innerHTML = '<i class="fa fa-play text-white"></i>';
+          this.stopAnimation();
+        }
+      }
+
+      switchVisualizationStyle(style) {
+        this.visualizationType = style;
+        this.elements.visualizationStyleBtns.forEach(btn => {
+          btn.classList.toggle('bg-primary/20', btn.dataset.style === style);
+          btn.classList.toggle('bg-gray-800', btn.dataset.style !== style);
+        });
+      }
+
+      startAnimation() {
+        if (this.animationFrameId) {
+          cancelAnimationFrame(this.animationFrameId);
+        }
+        this.animate(performance.now());
+      }
+
+      stopAnimation() {
+        if (this.animationFrameId) {
+          cancelAnimationFrame(this.animationFrameId);
+          this.animationFrameId = null;
+        }
+      }
+
+      animate(timestamp) {
+        this.animationFrameId = requestAnimationFrame(this.animate.bind(this));
+        
+        if (!this.audioProcessor.getIsPlaying()) {
+          return;
+        }
+
+        const currentTime = this.audioProcessor.getCurrentTime();
+        const duration = this.audioProcessor.getDuration();
+        const progress = Math.min((currentTime / duration) * 100, 100);
+        this.elements.progressBar.style.width = `${progress}%`;
+        this.elements.currentTime.textContent = formatTime(currentTime);
+
+        const dataArray = this.visualizationType === 'waveform' 
+          ? this.audioProcessor.getTimeDomainData() 
+          : this.audioProcessor.getFrequencyData();
+
+        if (!dataArray) return;
+
+        // 清除所有画布
+        this.clearAllCanvases();
+
+        switch(this.visualizationType) {
+          case 'waveform':
+            this.waveformRender.draw(dataArray);
+            break;
+          case 'particles':
+            this.waveformRender.drawSpectrum(dataArray);
+            this.particleSystem.update(dataArray);
+            break;
+          case 'geometry':
+            this.geometryBuilder.draw(dataArray);
+            break;
+          case 'waterdrop':
+            this.precipitationRender.draw(dataArray);
+            break;
+          case 'number10':
+            this.waveformRender.drawNumber10(dataArray);
+            break;
+          case 'keyboard':
+            this.keyboardMapper.draw(dataArray);
+            break;
+        }
+      }
+
+      clearAllCanvases() {
+        // 清除波形画布
+        const waveformCtx = this.waveformRender.ctx;
+        const waveformCanvas = this.waveformRender.canvas;
+        waveformCtx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+        
+        // 清除粒子画布
+        const particleCtx = this.particleSystem.ctx;
+        const particleCanvas = this.particleSystem.canvas;
+        particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+      }
+    }
+
+    // 初始化应用
+    document.addEventListener('DOMContentLoaded', () => {
+      const waveformCanvas = document.getElementById('waveform-canvas');
+      const particleCanvas = document.getElementById('particle-canvas');
+      
+      function resizeCanvas() {
+        waveformCanvas.width = waveformCanvas.offsetWidth;
+        waveformCanvas.height = waveformCanvas.offsetHeight;
+        particleCanvas.width = particleCanvas.offsetWidth;
+        particleCanvas.height = particleCanvas.offsetHeight;
+      }
+      
+      resizeCanvas();
+      window.addEventListener('resize', resizeCanvas);
+
+      const audioProcessor = new AudioProcessor();
+      const waveformRender = new WaveformRender(waveformCanvas);
+      const particleSystem = new ParticleSystem(particleCanvas);
+      const geometryBuilder = new GeometryBuilder(waveformCanvas);
+      const keyboardMapper = new KeyboardMapper(waveformCanvas);
+      const precipitationRender = new PrecipitationRender(waveformCanvas);
+
+      const uiController = new UIController(
+        audioProcessor,
+        waveformRender,
+        particleSystem,
+        geometryBuilder,
+        keyboardMapper,
+        precipitationRender
+      );
+
+      uiController.init();
+    });
+  </script>
+</body>
+</html>

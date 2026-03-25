@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>音乐可视化测试 - 修复版</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#C92027',
+            secondary: '#333333',
+            accent: '#F5F5F5',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .drop-area {
+        border: 2px dashed #C92027;
+        border-radius: 16px;
+        transition: all 0.3s ease;
+      }
+      .drop-area.active {
+        background-color: rgba(201, 32, 39, 0.1);
+        border-color: #8A0000;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div class="container mx-auto px-4 py-8">
+    <header class="flex justify-between items-center mb-8">
+      <div class="flex items-center space-x-3">
+        <i class="fa fa-music text-primary text-3xl"></i>
+        <h1 class="text-2xl font-bold">音乐可视化测试</h1>
+      </div>
+      <div class="relative">
+        <input type="file" id="file-input" class="hidden" accept="audio/*">
+        <button id="upload-btn" class="bg-primary hover:bg-primary/80 text-white px-6 py-2 rounded-full transition-all duration-300 flex items-center">
+          <i class="fa fa-upload mr-2"></i> 上传音频文件
+        </button>
+      </div>
+    </header>
+
+    <div id="drop-area" class="drop-area mb-8 p-8 text-center">
+      <i class="fa fa-music text-5xl text-gray-500 mb-4"></i>
+      <h2 class="text-xl font-semibold mb-2">拖放音频文件到此处</h2>
+      <p class="text-gray-400 mb-4">支持 MP3、WAV、OGG 等格式</p>
+      <button id="browse-btn" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded-full transition-all duration-300">
+        <i class="fa fa-folder-open mr-2"></i> 浏览文件
+      </button>
+    </div>
+
+    <div id="song-info" class="hidden bg-gray-800/50 rounded-xl p-6 backdrop-blur-md mb-8">
+      <div class="flex items-center space-x-4">
+        <img id="album-cover" src="https://picsum.photos/400/400" alt="专辑封面" class="w-24 h-24 object-cover rounded-lg">
+        <div>
+          <h2 id="song-title" class="text-xl font-bold">歌曲标题</h2>
+          <p id="song-artist" class="text-gray-300">艺术家</p>
+          <p id="file-info" class="text-sm text-gray-400 mt-2">文件信息</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="visualization-container" class="bg-gray-800/30 rounded-xl overflow-hidden mb-8">
+      <div class="relative w-full h-[400px]">
+        <canvas id="visualization-canvas" class="w-full h-full"></canvas>
+        
+        <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/60 backdrop-blur-md rounded-full px-6 py-3 flex items-center space-x-6">
+          <button id="play-btn" class="bg-primary hover:bg-primary/80 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 transform hover:scale-105" disabled>
+            <i class="fa fa-play text-white"></i>
+          </button>
+        </div>
+
+        <div class="absolute bottom-20 left-0 right-0 px-6">
+          <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+            <div id="progress-bar" class="h-full bg-primary w-0 transition-all duration-100"></div>
+          </div>
+          <div class="flex justify-between text-xs text-gray-400 mt-1">
+            <span id="current-time">0:00</span>
+            <span id="total-time">0:00</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-gray-900 p-4 flex justify-center space-x-4">
+        <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors active" data-style="waveform">
+          <i class="fa fa-area-chart mr-2"></i> 波形
+        </button>
+        <button class="visualization-style-btn bg-gray-800 hover:bg-primary/20 px-4 py-2 rounded-lg transition-colors" data-style="spectrum">
+          <i class="fa fa-bar-chart mr-2"></i> 频谱
+        </button>
+      </div>
+    </div>
+
+    <div id="no-song-selected" class="flex flex-col items-center justify-center h-64 bg-gray-800/30 rounded-xl">
+      <i class="fa fa-music text-6xl text-gray-600 mb-4"></i>
+      <p class="text-gray-500 text-center">请上传音频文件</p>
+      <p class="text-gray-400 text-sm mt-2">测试文件上传和切换功能</p>
+    </div>
+  </div>
+
+  <script>
+    // 工具函数
+    function formatTime(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = Math.floor(seconds % 60);
+      return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      else return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    // 音频处理器
+    class AudioProcessor {
+      constructor() {
+        this.audioContext = null;
+        this.analyser = null;
+        this.dataArray = null;
+        this.bufferLength = null;
+        this.audioBuffer = null;
+        this.sourceNode = null;
+        this.isPlaying = false;
+        this.audioDuration = 0;
+        this.startTime = 0;
+      }
+
+      init() {
+        if (!this.audioContext) {
+          this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          this.analyser = this.audioContext.createAnalyser();
+          this.analyser.fftSize = 2048;
+          this.bufferLength = this.analyser.frequencyBinCount;
+          this.dataArray = new Uint8Array(this.bufferLength);
+        }
+      }
+
+      async handleAudioFile(file) {
+        return new Promise((resolve, reject) => {
+          this.init();
+          
+          // 停止当前正在播放的音频
+          this.stopAudio();
+          
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const arrayBuffer = e.target.result;
+            this.audioContext.decodeAudioData(arrayBuffer, (buffer) => {
+              this.audioBuffer = buffer;
+              this.audioDuration = buffer.duration;
+              this.createAudioSource();
+              resolve({ success: true, duration: buffer.duration });
+            }, (error) => {
+              console.error('解码音频失败:', error);
+              reject(new Error('无法解码音频文件，请尝试其他格式'));
+            });
+          };
+          reader.onerror = (error) => {
+            reject(new Error('读取文件失败'));
+          };
+          reader.readAsArrayBuffer(file);
+        });
+      }
+
+      createAudioSource() {
+        if (!this.audioBuffer) return;
+        if (this.sourceNode) this.sourceNode.disconnect();
+        this.sourceNode = this.audioContext.createBufferSource();
+        this.sourceNode.buffer = this.audioBuffer;
+        this.sourceNode.connect(this.analyser);
+        this.analyser.connect(this.audioContext.destination);
+      }
+
+      togglePlay() {
+        if (!this.audioBuffer) return false;
+        if (this.isPlaying) {
+          this.stopAudio();
+        } else {
+          if (this.audioContext.state === 'suspended') {
+            this.audioContext.resume();
+          }
+          if (!this.sourceNode) this.createAudioSource();
+          this.sourceNode.start(0);
+          this.startTime = this.audioContext.currentTime;
+          this.isPlaying = true;
+        }
+        return this.isPlaying;
+      }
+
+      stopAudio() {
+        if (this.sourceNode) {
+          try {
+            this.sourceNode.stop();
+          } catch (e) {
+            console.log('音频已停止');
+          }
+          this.sourceNode.disconnect();
+          this.sourceNode = null;
+        }
+        this.isPlaying = false;
+      }
+
+      getCurrentTime() {
+        if (!this.isPlaying || !this.audioContext) return 0;
+        return this.audioContext.currentTime - this.startTime;
+      }
+
+      getDuration() {
+        return this.audioDuration;
+      }
+
+      getTimeDomainData() {
+        if (!this.analyser) return null;
+        this.analyser.getByteTimeDomainData(this.dataArray);
+        return this.dataArray;
+      }
+
+      getFrequencyData() {
+        if (!this.analyser) return null;
+        this.analyser.getByteFrequencyData(this.dataArray);
+        return this.dataArray;
+      }
+
+      getIsPlaying() {
+        return this.isPlaying;
+      }
+    }
+
+    // 可视化渲染
+    class VisualizationRender {
+      constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d');
+      }
+
+      drawWaveform(dataArray) {
+        const ctx = this.ctx;
+        const canvas = this.canvas;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.beginPath();
+        ctx.moveTo(0, canvas.height/2);
+        
+        const sliceWidth = canvas.width * 1.0 / dataArray.length;
+        let x = 0;
+        for(let i = 0; i < dataArray.length; i++) {
+          const v = (dataArray[i] - 128) / 128.0;
+          const y = v * canvas.height/2 + canvas.height/2;
+          if(i === 0) {
+            ctx.lineTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+          x += sliceWidth;
+        }
+        
+        ctx.lineTo(canvas.width, canvas.height/2);
+        ctx.strokeStyle = '#C92027';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      drawSpectrum(dataArray) {
+        const ctx = this.ctx;
+        const canvas = this.canvas;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const barWidth = (canvas.width / dataArray.length) * 2.5;
+        let x = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const barHeight = (dataArray[i] / 255) * canvas.height;
+          ctx.fillStyle = '#C92027';
+          ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+          x += barWidth + 1;
+        }
+      }
+    }
+
+    // UI控制器
+    class UIController {
+      constructor(audioProcessor, visualizationRender) {
+        this.audioProcessor = audioProcessor;
+        this.visualizationRender = visualizationRender;
+        this.visualizationType = 'waveform';
+        this.animationFrameId = null;
+        
+        this.elements = {
+          uploadBtn: document.getElementById('upload-btn'),
+          fileInput: document.getElementById('file-input'),
+          browseBtn: document.getElementById('browse-btn'),
+          dropArea: document.getElementById('drop-area'),
+          playBtn: document.getElementById('play-btn'),
+          songInfo: document.getElementById('song-info'),
+          noSongSelected: document.getElementById('no-song-selected'),
+          songTitle: document.getElementById('song-title'),
+          songArtist: document.getElementById('song-artist'),
+          albumCover: document.getElementById('album-cover'),
+          fileInfo: document.getElementById('file-info'),
+          progressBar: document.getElementById('progress-bar'),
+          currentTime: document.getElementById('current-time'),
+          totalTime: document.getElementById('total-time'),
+          visualizationStyleBtns: document.querySelectorAll('.visualization-style-btn')
+        };
+      }
+
+      init() {
+        this.bindEvents();
+      }
+
+      bindEvents() {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+          this.elements.dropArea.addEventListener(eventName, e => { 
+            e.preventDefault(); 
+            e.stopPropagation(); 
+          }, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+          this.elements.dropArea.addEventListener(eventName, () => {
+            this.elements.dropArea.classList.add('active');
+          }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+          this.elements.dropArea.addEventListener(eventName, () => {
+            this.elements.dropArea.classList.remove('active');
+          }, false);
+        });
+
+        this.elements.dropArea.addEventListener('drop', e => {
+          const file = e.dataTransfer.files[0];
+          if (file && file.type.startsWith('audio/')) {
+            this.handleAudioFile(file);
+          } else {
+            alert('请上传音频文件');
+          }
+        });
+
+        this.elements.uploadBtn.addEventListener('click', () => {
+          this.elements.fileInput.click();
+        });
+
+        this.elements.browseBtn.addEventListener('click', () => {
+          this.elements.fileInput.click();
+        });
+
+        this.elements.fileInput.addEventListener('change', () => {
+          if (this.elements.fileInput.files.length > 0) {
+            this.handleAudioFile(this.elements.fileInput.files[0]);
+          }
+        });
+
+        this.elements.playBtn.addEventListener('click', () => {
+          this.togglePlay();
+        });
+
+        this.elements.visualizationStyleBtns.forEach(btn => {
+          btn.addEventListener('click', () => {
+            this.switchVisualizationStyle(btn.dataset.style);
+          });
+        });
+      }
+
+      async handleAudioFile(file) {
+        this.elements.songTitle.textContent = file.name;
+        this.elements.songArtist.textContent = "未知艺术家";
+        this.elements.fileInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
+        
+        jsmediatags.read(file, {
+          onSuccess: (tag) => {
+            const picture = tag.tags.picture;
+            if (picture) {
+              const base64String = Array.from(new Uint8Array(picture.data)).map(byte => 
+                String.fromCharCode(byte)
+              ).join('');
+              this.elements.albumCover.src = `data:${picture.format};base64,${window.btoa(base64String)}`;
+            } else {
+              this.elements.albumCover.src = `https://picsum.photos/seed/${file.name}/400/400`;
+            }
+          },
+          onError: (error) => {
+            console.error('解析封面失败:', error);
+            this.elements.albumCover.src = `https://picsum.photos/seed/${file.name}/400/400`;
+          }
+        });
+        
+        this.elements.songInfo.classList.remove('hidden');
+        this.elements.noSongSelected.classList.add('hidden');
+        this.elements.playBtn.disabled = false;
+
+        try {
+          const result = await this.audioProcessor.handleAudioFile(file);
+          this.elements.totalTime.textContent = formatTime(result.duration);
+        } catch (error) {
+          alert(error.message);
+        }
+      }
+
+      togglePlay() {
+        const isPlaying = this.audioProcessor.togglePlay();
+        if (isPlaying) {
+          this.elements.playBtn.innerHTML = '<i class="fa fa-pause text-white"></i>';
+          this.startAnimation();
+        } else {
+          this.elements.playBtn.innerHTML = '<i class="fa fa-play text-white"></i>';
+          this.stopAnimation();
+        }
+      }
+
+      switchVisualizationStyle(style) {
+        this.visualizationType = style;
+        this.elements.visualizationStyleBtns.forEach(btn => {
+          btn.classList.toggle('bg-primary/20', btn.dataset.style === style);
+          btn.classList.toggle('bg-gray-800', btn.dataset.style !== style);
+        });
+      }
+
+      startAnimation() {
+        if (this.animationFrameId) {
+          cancelAnimationFrame(this.animationFrameId);
+        }
+        this.animate(performance.now());
+      }
+
+      stopAnimation() {
+        if (this.animationFrameId) {
+          cancelAnimationFrame(this.animationFrameId);
+          this.animationFrameId = null;
+        }
+      }
+
+      animate(timestamp) {
+        this.animationFrameId = requestAnimationFrame(this.animate.bind(this));
+        
+        if (!this.audioProcessor.getIsPlaying()) {
+          return;
+        }
+
+        const currentTime = this.audioProcessor.getCurrentTime();
+        const duration = this.audioProcessor.getDuration();
+        const progress = Math.min((currentTime / duration) * 100, 100);
+        this.elements.progressBar.style.width = `${progress}%`;
+        this.elements.currentTime.textContent = formatTime(currentTime);
+
+        const dataArray = this.visualizationType === 'waveform' 
+          ? this.audioProcessor.getTimeDomainData() 
+          : this.audioProcessor.getFrequencyData();
+
+        if (!dataArray) return;
+
+        if (this.visualizationType === 'waveform') {
+          this.visualizationRender.drawWaveform(dataArray);
+        } else if (this.visualizationType === 'spectrum') {
+          this.visualizationRender.drawSpectrum(dataArray);
+        }
+      }
+    }
+
+    // 初始化应用
+    document.addEventListener('DOMContentLoaded', () => {
+      const canvas = document.getElementById('visualization-canvas');
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      
+      window.addEventListener('resize', () => {
+        canvas.width = canvas.offsetWidth;
+        canvas.height = canvas.offsetHeight;
+      });
+
+      const audioProcessor = new AudioProcessor();
+      const visualizationRender = new VisualizationRender(canvas);
+      const uiController = new UIController(audioProcessor, visualizationRender);
+
+      uiController.init();
+    });
+  </script>
+</body>
+</html>

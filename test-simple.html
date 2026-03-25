@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>测试音乐可视化</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#C92027',
+            secondary: '#333333',
+            accent: '#F5F5F5',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .drop-area {
+        border: 2px dashed #C92027;
+        border-radius: 16px;
+        transition: all 0.3s ease;
+      }
+      .drop-area.active {
+        background-color: rgba(201, 32, 39, 0.1);
+        border-color: #8A0000;
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+  <div class="container mx-auto px-4 py-8">
+    <header class="flex justify-between items-center mb-8">
+      <div class="flex items-center space-x-3">
+        <i class="fa fa-music text-primary text-3xl"></i>
+        <h1 class="text-2xl font-bold">测试音乐可视化</h1>
+      </div>
+      <div class="relative">
+        <input type="file" id="file-input" class="hidden" accept="audio/*">
+        <button id="upload-btn" class="bg-primary hover:bg-primary/80 text-white px-6 py-2 rounded-full transition-all duration-300 flex items-center">
+          <i class="fa fa-upload mr-2"></i> 上传音频文件
+        </button>
+      </div>
+    </header>
+
+    <div id="drop-area" class="drop-area mb-8 p-8 text-center">
+      <i class="fa fa-music text-5xl text-gray-500 mb-4"></i>
+      <h2 class="text-xl font-semibold mb-2">拖放音频文件到此处</h2>
+      <p class="text-gray-400 mb-4">支持 MP3、WAV、OGG 等格式</p>
+      <button id="browse-btn" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded-full transition-all duration-300">
+        <i class="fa fa-folder-open mr-2"></i> 浏览文件
+      </button>
+    </div>
+
+    <div id="song-info" class="hidden bg-gray-800/50 rounded-xl p-6 backdrop-blur-md mb-8">
+      <div class="flex items-center space-x-4">
+        <img id="album-cover" src="https://picsum.photos/400/400" alt="专辑封面" class="w-24 h-24 object-cover rounded-lg">
+        <div>
+          <h2 id="song-title" class="text-xl font-bold">歌曲标题</h2>
+          <p id="song-artist" class="text-gray-300">艺术家</p>
+          <p id="file-info" class="text-sm text-gray-400 mt-2">文件信息</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="no-song-selected" class="flex flex-col items-center justify-center h-64 bg-gray-800/30 rounded-xl">
+      <i class="fa fa-music text-6xl text-gray-600 mb-4"></i>
+      <p class="text-gray-500 text-center">请上传音频文件</p>
+      <p class="text-gray-400 text-sm mt-2">测试文件上传功能</p>
+    </div>
+  </div>
+
+  <script>
+    // 简化的测试脚本
+    const uploadBtn = document.getElementById('upload-btn');
+    const fileInput = document.getElementById('file-input');
+    const browseBtn = document.getElementById('browse-btn');
+    const dropArea = document.getElementById('drop-area');
+    const songInfo = document.getElementById('song-info');
+    const noSongSelected = document.getElementById('no-song-selected');
+    const songTitle = document.getElementById('song-title');
+    const songArtist = document.getElementById('song-artist');
+    const albumCover = document.getElementById('album-cover');
+    const fileInfo = document.getElementById('file-info');
+
+    // 格式化文件大小
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      else return (bytes / 1048576).toFixed(1) + ' MB';
+    }
+
+    // 处理音频文件
+    function handleAudioFile(file) {
+      console.log('文件上传成功:', file);
+      songTitle.textContent = file.name;
+      songArtist.textContent = "未知艺术家";
+      fileInfo.textContent = `${file.name} (${formatFileSize(file.size)})`;
+      
+      // 读取音频文件标签
+      jsmediatags.read(file, {
+        onSuccess: function(tag) {
+          console.log('音频标签解析成功:', tag);
+          const picture = tag.tags.picture;
+          if (picture) {
+            const base64String = Array.from(new Uint8Array(picture.data)).map(byte => 
+              String.fromCharCode(byte)
+            ).join('');
+            albumCover.src = `data:${picture.format};base64,${window.btoa(base64String)}`;
+          } else {
+            albumCover.src = `https://picsum.photos/seed/${file.name}/400/400`;
+          }
+        },
+        onError: function(error) {
+          console.error('解析封面失败:', error);
+          albumCover.src = `https://picsum.photos/seed/${file.name}/400/400`;
+        }
+      });
+      
+      // 显示歌曲信息，隐藏提示
+      songInfo.classList.remove('hidden');
+      noSongSelected.classList.add('hidden');
+    }
+
+    // 绑定事件
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, e => { 
+        e.preventDefault(); 
+        e.stopPropagation(); 
+      }, false);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropArea.addEventListener(eventName, () => {
+        dropArea.classList.add('active');
+      }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropArea.addEventListener(eventName, () => {
+        dropArea.classList.remove('active');
+      }, false);
+    });
+
+    // 文件拖放
+    dropArea.addEventListener('drop', e => {
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('audio/')) {
+        handleAudioFile(file);
+      } else {
+        alert('请上传音频文件');
+      }
+    });
+
+    // 上传按钮
+    uploadBtn.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    // 浏览按钮
+    browseBtn.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    // 文件选择
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0) {
+        handleAudioFile(fileInput.files[0]);
+      }
+    });
+
+    console.log('测试页面加载完成');
+  </script>
+</body>
+</html>

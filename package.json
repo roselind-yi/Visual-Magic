@@ -1,0 +1,29 @@
+{
+  "name": "boli-music",
+  "version": "1.0.0",
+  "description": "本地音乐可视化工具",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server -p 8000",
+    "dev": "npx http-server -p 8000 -o",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "music",
+    "visualization",
+    "audio",
+    "canvas",
+    "web-audio-api"
+  ],
+  "author": "Roselind",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.8",
+    "font-awesome": "^4.7.0",
+    "jsmediatags": "^3.9.7",
+    "wavesurfer.js": "^6.6.3"
+  }
+}
